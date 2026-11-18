@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>EduRed</title>
+  <meta name="description" content="Simulador interactivo de distribución de donaciones entre 1500 II.EE. públicas de Lima. Algoritmos en Python (Pyodide): UFDS, Bellman-Ford y voraz.">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+  <link rel="stylesheet" href="css/styles.css?v=4">
+</head>
+<body>
+  <aside id="panel">
+    <header class="marca">
+      <h1>EduRed</h1>
+    </header>
+
+    <nav class="tabs" role="tablist">
+      <button class="tab activo" data-tab="sim" role="tab">Simulación</button>
+      <button class="tab" data-tab="explorar" role="tab">Explorar grafo</button>
+      <button class="tab" data-tab="conect" role="tab">Conectividad</button>
+    </nav>
+
+    <!-- ============ SIMULACIÓN ============ -->
+    <section class="vista activo" id="tab-sim">
+      <div class="bloque">
+        <label class="etq" for="metrica">Peso de las aristas</label>
+        <select id="metrica">
+          <option value="km">Distancia (distancia_km)</option>
+          <option value="peso08">Dataset: peso_08 (distancia × 2, 8:00 a. m.)</option>
+          <option value="trafico">Modelo de tráfico (configurable)</option>
+        </select>
+      </div>
+
+      <div id="trafico" class="trafico" hidden>
+        <div class="grid2">
+          <label>Hora<select id="tHora"></select></label>
+          <label>Día<select id="tDia"></select></label>
+          <label>Clima<select id="tClima"></select></label>
+          <label class="check abajo"><input type="checkbox" id="tZonas" checked> Congestión por distrito</label>
+        </div>
+        <p class="nota">peso = distancia × f<sub>hora</sub> × f<sub>día</sub> × f<sub>clima</sub> × f<sub>zona</sub>. El recargo por zona crece en hora punta, por eso puede cambiar la ruta y no solo el costo.</p>
+      </div>
+
+      <div class="bloque">
+        <div class="etq">Al hacer clic en un nodo del mapa…</div>
+        <div class="segmento" id="modoClic">
+          <button data-modo="origen">Fijar origen</button>
+          <button data-modo="destino" class="activo">Agregar destino</button>
+          <button data-modo="info">Solo ver info</button>
+        </div>
+      </div>
+
+      <div class="bloque">
+        <label class="etq" for="buscar">Buscar institución (ID, nombre o distrito)</label>
+        <div class="buscador">
+          <input id="buscar" type="search" placeholder="Ej. 210, Fe y Alegría, Rímac…" autocomplete="off">
+          <ul id="sugerencias" class="sugerencias" hidden></ul>
+        </div>
+      </div>
+
+      <div class="bloque">
+        <div class="etq">Origen</div>
+        <div id="origenBox" class="origen vacio"></div>
+      </div>
+
+      <div class="bloque">
+        <div class="etq">Destinos <span id="nDest" class="pill">0</span></div>
+        <ul id="destinos" class="chips"></ul>
+        <div class="fila">
+          <button id="btnAleatorio" class="sec">+ 8 aleatorios</button>
+          <button id="btnLimpiar" class="sec">Limpiar</button>
+        </div>
+      </div>
+
+      <button id="btnEjecutar" class="primario" disabled>Ejecutar simulación</button>
+
+      <div id="resultado" hidden>
+        <div id="alertas"></div>
+        <div class="kpis">
+          <div class="kpi"><span id="kTotal">–</span><small>costo total</small></div>
+          <div class="kpi"><span id="kEntregas">–</span><small>entregas</small></div>
+          <div class="kpi"><span id="kSaltos">–</span><small>tramos recorridos</small></div>
+        </div>
+        <div id="comparacion" class="detalles"></div>
+
+        <div class="reproductor">
+          <button id="btnPlay" class="primario chico">▶ Animar recorrido</button>
+          <label class="vel">Velocidad
+            <input id="velocidad" type="range" min="1" max="10" value="5">
+          </label>
+        </div>
+        <div class="progreso"><div id="barra"></div></div>
+
+        <div class="etq">Orden de distribución (clic para ver el tramo)</div>
+        <ol id="entregas" class="entregas"></ol>
+      </div>
+    </section>
+
+    <!-- ============ EXPLORAR ============ -->
+    <section class="vista" id="tab-explorar">
+      <div class="bloque">
+        <div class="etq">Colorear nodos por</div>
+        <div class="segmento" id="colorPor">
+          <button data-color="tramo" class="activo">Integrante</button>
+          <button data-color="comp">Componente</button>
+          <button data-color="grado">Grado</button>
+          <button data-color="zona">Congestión</button>
+        </div>
+      </div>
+      <div class="bloque">
+        <div class="etq">Mostrar tramo</div>
+        <div id="tramos" class="tramos"></div>
+        <label class="check"><input type="checkbox" id="chkVecinos" checked> Incluir vecinos directos (en gris)</label>
+      </div>
+      <div class="bloque">
+        <label class="check"><input type="checkbox" id="chkAristas" checked> Mostrar aristas</label>
+        <label class="check"><input type="checkbox" id="chkMapa" checked> Mostrar mapa de fondo (OpenStreetMap)</label>
+      </div>
+      <div id="resumenTramo" class="tabla-wrap"></div>
+      <div id="leyenda" class="leyenda"></div>
+    </section>
+
+    <!-- ============ CONECTIVIDAD ============ -->
+    <section class="vista" id="tab-conect">
+      <p class="nota">UFDS (Quick-Union ponderado) sobre el grafo completo. Haz clic en una componente para resaltarla en el mapa.</p>
+      <div class="kpis">
+        <div class="kpi"><span id="cNodos">–</span><small>nodos</small></div>
+        <div class="kpi"><span id="cAristas">–</span><small>aristas</small></div>
+        <div class="kpi"><span id="cComp">–</span><small>componentes</small></div>
+      </div>
+      <ul id="listaComp" class="comp-lista"></ul>
+    </section>
+
+    <footer class="pie">Mapa © colaboradores de OpenStreetMap</footer>
+  </aside>
+
+  <main id="mapa" aria-label="Mapa del grafo"></main>
+  <div id="cargando"><div><div class="spinner"></div><span id="cargandoTxt">Cargando Python (Pyodide)…</span></div></div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js"></script>
+  <script src="js/app.js?v=5"></script>
+</body>
+</html>
