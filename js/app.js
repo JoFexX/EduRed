@@ -104,9 +104,24 @@
     marcadores = nodos.map((n, i) => {
       const m = L.circleMarker([n.lat, n.lon], { renderer: render, radius: 4, weight: 1, color: "#080708", fillOpacity: 0.95 });
       m.bindTooltip(`<b>${n.id}</b> · ${esc(n.nom)}`, { direction: "top", offset: [0, -4] });
-      m.on("click", () => clicNodo(i));
       return m;
     });
+    // Un solo manejador en el mapa: elige el nodo visible más cercano al clic.
+    // Así no hace falta acertar exactamente sobre el círculo de 4 px.
+    mapa.on("click", e => {
+      const i = nodoCercano(e.containerPoint, 12);
+      if (i != null) clicNodo(i);
+    });
+  }
+
+  function nodoCercano(pt, tolerancia) {
+    let mejor = null, dMin = Infinity;
+    marcadores.forEach((m, i) => {
+      if (!capaNodos.hasLayer(m)) return;
+      const d = mapa.latLngToContainerPoint(m.getLatLng()).distanceTo(pt);
+      if (d < dMin) { dMin = d; mejor = i; }
+    });
+    return dMin <= tolerancia + (mejor != null ? marcadores[mejor].getRadius() : 0) ? mejor : null;
   }
 
   function tramoInfo(t) {
@@ -174,7 +189,10 @@
 
   // ---------------------------------------------------------------- interacción con nodos
   function clicNodo(i) {
-    if (st.modo === "origen") fijarOrigen(i);
+    // fuera de «Simulación» el clic solo muestra la ficha (que tiene botones de origen/destino)
+    if (st.tab !== "sim") return abrirPopup(i);
+    if (st.modo === "origen") { fijarOrigen(i); return ponerModo("destino"); }
+    if (st.modo === "destino") alternarDestino(i);
     else if (st.modo === "destino") alternarDestino(i);
     else abrirPopup(i);
   }
@@ -259,10 +277,11 @@
     $("#btnEjecutar").disabled = st.origen == null || st.destinos.length === 0;
   }
 
-  $$("#modoClic button").forEach(b => (b.onclick = () => {
-    $$("#modoClic button").forEach(x => x.classList.toggle("activo", x === b));
-    st.modo = b.dataset.modo;
-  }));
+  function ponerModo(modo) {
+    st.modo = modo;
+    $$("#modoClic button").forEach(x => x.classList.toggle("activo", x.dataset.modo === modo));
+  }
+  $$("#modoClic button").forEach(b => (b.onclick = () => ponerModo(b.dataset.modo)));
   $("#metrica").onchange = e => {
     st.metrica = e.target.value;
     $("#trafico").hidden = st.metrica !== "trafico";
@@ -360,7 +379,7 @@
     r.entregas.forEach((e, k) => {
       const pts = e.camino.map(i => [nodos[i].lat, nodos[i].lon]);
       const halo = L.polyline(pts, { color: "#080708", weight: 8, opacity: 0.8, interactive: false }).addTo(capaRuta);
-      const p = L.polyline(pts, { color: C.ruta, weight: 4, opacity: 0.95 }).addTo(capaRuta);
+      const p = L.polyline(pts, { color: C.ruta, weight: 4, opacity: 0.95, bubblingMouseEvents: false }).addTo(capaRuta);
       p.bindTooltip(`Tramo ${k + 1}: ${fmt(e.costo)} ${unidad()}`, { sticky: true });
       p.on("click", () => seleccionarLeg(k));
       e.camino.slice(1, -1).forEach(i => L.circleMarker([nodos[i].lat, nodos[i].lon], {
