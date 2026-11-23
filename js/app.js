@@ -102,10 +102,23 @@
   // ---------------------------------------------------------------- nodos y aristas
   function crearMarcadores() {
     marcadores = nodos.map((n, i) => {
-      const m = L.circleMarker([n.lat, n.lon], { renderer: render, radius: 4, weight: 1, color: "#080708", fillOpacity: 0.95 });
-      m.bindTooltip(`<b>${n.id}</b> · ${esc(n.nom)}`, { direction: "top", offset: [0, -4] });
-      return m;
+      // interactive:false → el mapa decide qué nodo está bajo el cursor (con tolerancia)
+      return L.circleMarker([n.lat, n.lon], { renderer: render, radius: 4, weight: 1, color: "#080708", fillOpacity: 0.95, interactive: false });
     });
+    // Etiqueta al pasar el cursor: ID y nombre del colegio más cercano
+    const etiqueta = L.tooltip({ direction: "top", offset: [0, -6] });
+    let hoverIdx = null;
+    mapa.on("mousemove", e => {
+      const i = nodoCercano(e.containerPoint, 8);
+      if (i === hoverIdx) return;
+      hoverIdx = i;
+      mapa.getContainer().style.cursor = i == null ? "" : "pointer";
+      if (i == null) return mapa.closeTooltip(etiqueta);
+      const n = nodos[i];
+      etiqueta.setLatLng([n.lat, n.lon]).setContent(`<b>${n.id}</b> · ${esc(n.nom)}`);
+      mapa.openTooltip(etiqueta);
+    });
+    mapa.on("mouseout", () => { hoverIdx = null; mapa.closeTooltip(etiqueta); mapa.getContainer().style.cursor = ""; });
     // Un solo manejador en el mapa: elige el nodo visible más cercano al clic.
     // Así no hace falta acertar exactamente sobre el círculo de 4 px.
     mapa.on("click", e => {
@@ -585,10 +598,7 @@
 
   function renderResumenTramo() {
     const box = $("#resumenTramo");
-    if (!st.tramo) {
-      box.innerHTML = `<p class="nota">Elige un tramo para ver su subgrafo y el resumen del informe (sección 9 del notebook).</p>`;
-      return;
-    }
+    if (!st.tramo) { box.innerHTML = ""; return; }
     const info = tramoInfo(st.tramo);
     box.innerHTML = `<div class="etq">Resumen de ${esc(st.tramo.nombre)}</div><table>${info.filas.map(([a, b]) => `<tr><td>${esc(a)}</td><td>${b}</td></tr>`).join("")}</table>`;
   }

@@ -26,7 +26,6 @@ Solo usa la librería estándar.
   comparar con el orden en que se eligieron los destinos y **animar el recorrido**.
 - **Peso de las aristas**:
   - `distancia_km`
-  - `peso_08` del dataset (distancia × 2)
   - **Modelo de tráfico**: `peso = distancia × f_hora × f_día × f_clima × f_zona`
     - Hora: 06:00, 08:00 (=2.0, igual al dataset), 11:00, 13:00, 15:00, 18:00, 21:00, 23:00
     - Día: laborable, sábado, domingo/feriado
